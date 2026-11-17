@@ -27,7 +27,17 @@ function setup() {
     .dayname{padding:14px 7px;text-align:center;color:#777;font-size:11px}.calendar{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));border-left:1px solid #e5e5e5;border-top:1px solid #e5e5e5}
     .day{min-height:118px;position:relative;background:#fff;border:0;border-right:1px solid #e5e5e5;border-bottom:1px solid #e5e5e5;text-align:left;padding:8px;overflow:hidden}
     .day:hover:not(.empty){background:#f6f6f6}.day.empty{background:#fcfcfc;cursor:default}.daynum{font-size:11px;color:#666}
-    .ticketthumb{width:100%;height:66px;object-fit:contain;display:block;margin:4px auto 0}.count{position:absolute;right:7px;top:7px;font-size:10px;color:#777}
+    .ticketthumb{width:100%;height:66px;object-fit:contain;display:block;margin:4px auto 0}.count{
+  position:absolute;
+  right:8px;
+  top:8px;
+  font-size:9px;
+  letter-spacing:3px;
+  color:#111111;
+  max-width:65%;
+  text-align:right;
+  line-height:1.5;
+}
     .sectionrow{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}.gallery{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:24px;margin-top:20px}
     .tile{background:#fff;border:0;text-align:left;padding:0;min-width:0}.tilefigure{height:160px;border:1px solid #eee;display:flex;align-items:center;justify-content:center;padding:14px;background:#fafafa}
     .tilefigure img{width:100%;height:100%;object-fit:contain}.tile p{font-size:12px;margin:10px 0 2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
