@@ -99,7 +99,7 @@ function renderCalendar(){
     if(d<1||d>days){html+=`<div class="day empty"></div>`;continue;}
     const date=`${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
     const found=EP.tickets.filter(t=>t.date===date),ticket=found[0];
-    html+=`<button class="day" data-date="${date}"><span class="daynum">${d}</span>${found.length?`<span class="count">${found.length}</span><img class="ticketthumb" src="${ticket.image}" alt="ticket">`:''}</button>`;
+    html+=`<button class="day" data-date="${date}"><span class="daynum">${d}</span>${found.length?`<span class="count">${'●'.repeat(found.length)}</span><img class="ticketthumb" src="${ticket.image}" alt="ticket">`:''}</button>`;
   }
   html+='</div><div class="sectionrow" style="margin-top:28px"><span class="meta">TICKETS WITHOUT A DATE</span><span class="meta">CLICK A DATE TO OPEN</span></div>';
   const undated=EP.tickets.filter(t=>!t.date);
