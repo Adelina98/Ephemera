@@ -39,7 +39,8 @@ function setup() {
   line-height:1.5;
 }
     .sectionrow{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}.gallery{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:24px;margin-top:20px}
-    .tile{background:#fff;border:0;text-align:left;padding:0;min-width:0}.tilefigure{height:160px;border:1px solid #eee;display:flex;align-items:center;justify-content:center;padding:14px;background:#fafafa}
+    .tile{background:#fff;border:0;text-align:left;padding:0;min-width:0}
+.tilefigure{height:200px;border:1px solid #e5e5e5;display:flex;align-items:center;justify-content:center;padding:15px;background:#fff;box-sizing:border-box}
     .tilefigure img{width:100%;height:100%;object-fit:contain}.tile p{font-size:12px;margin:10px 0 2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .tile small{color:#777}.panel{display:grid;grid-template-columns:1fr 1fr;gap:30px;margin-top:30px}.field{display:block;margin-bottom:14px}
     .field label{display:block;font-size:10px;color:#777;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px}
@@ -59,7 +60,7 @@ function setup() {
   `;
   document.head.appendChild(style);
   document.body.insertAdjacentHTML('beforeend', `<div id="ep"><header><div class="brand">ephemera.</div><div class="rightnav">
-    <button class="btn" id="calendarTab">CALENDAR</button><button class="btn" id="gridTab">GRID</button>
+    <button class="btn" id="calendarTab">CALENDAR</button><button class="btn" id="gridTab">GALLERY</button>
     <button class="btn dark" id="addTab">+ ADD TICKET</button></div></header><main id="epContent"></main>
     <input type="file" id="fileInput" accept="image/*" hidden><input type="file" id="cameraInput" accept="image/*" capture="environment" hidden>
     <input type="file" id="bulkInput" accept="image/*" multiple hidden></div>`);
@@ -128,13 +129,94 @@ function changeMonth(delta){const date=new Date(EP.year,EP.month+delta,1);EP.yea
 function tileHTML(t){return `<button class="tile" data-ticket="${escapeHTML(t.id)}"><div class="tilefigure"><img src="${t.image}" alt="${escapeHTML(t.title)}"></div>
   <p>${escapeHTML(t.title||'Untitled ticket')}</p><small>${escapeHTML(formattedDate(t.date))} · ${escapeHTML(t.category||'OTHER')}</small></button>`;}
 function connectTiles(){document.querySelectorAll('[data-ticket]').forEach(x=>x.onclick=()=>openTicket(x.dataset.ticket));}
-function renderGrid(){
-  const shown=EP.dateFilter?EP.tickets.filter(t=>t.date===EP.dateFilter):EP.tickets;
-  $('#epContent').innerHTML=`<div class="hero"><div><div class="meta">THE COLLECTION</div><h1>${EP.dateFilter||'All tickets.'}</h1></div><span class="meta">${shown.length} OBJECTS</span></div>
-  <div class="sectionrow"><span class="meta">YOUR TICKETS, YOUR MEMORIES</span><div>${EP.dateFilter?button('SHOW ALL','showAll'):''}${button('IMPORT MULTIPLE IMAGES','bulkImport')}</div></div>
-  ${shown.length?`<div class="gallery">${shown.map(tileHTML).join('')}</div>`:'<div class="emptymsg">No tickets yet. Add a scan to begin your archive.</div>'}`;
-  $('#bulkImport').onclick=()=>$('#bulkInput').click();if($('#showAll'))$('#showAll').onclick=()=>{EP.dateFilter=null;render();};connectTiles();
+
+function renderGrid() {
+  const all = EP.dateFilter
+    ? EP.tickets.filter(t => t.date === EP.dateFilter)
+    : [...EP.tickets];
+
+  const categories = [
+    "All", "Concert", "Recital", "Exhibition",
+    "Musical", "Theatre", "Travel", "Other"
+  ];
+
+  $('#epContent').innerHTML = `
+    <div class="hero">
+      <div>
+        <div class="meta">THE COLLECTION</div>
+        <h1>My Collection.</h1>
+      </div>
+      <span class="meta">${all.length} OBJECTS</span>
+    </div>
+
+    <div class="sectionrow">
+      <span class="meta">YOUR TICKETS, YOUR MEMORIES</span>
+      <div>
+        <select id="galleryFilter" class="btn">
+          ${categories.map(c =>
+            `<option value="${c}">${c.toUpperCase()}</option>`
+          ).join('')}
+        </select>
+
+        <select id="gallerySort" class="btn">
+          <option value="newest">NEWEST FIRST</option>
+          <option value="oldest">OLDEST FIRST</option>
+          <option value="title">TITLE A-Z</option>
+        </select>
+
+        ${EP.dateFilter ? button('SHOW ALL', 'showAll') : ''}
+        ${button('IMPORT MULTIPLE IMAGES', 'bulkImport')}
+      </div>
+    </div>
+
+    <div class="gallery" id="galleryItems"></div>
+  `;
+
+  function updateGallery() {
+    const category = $('#galleryFilter').value;
+    const sorting = $('#gallerySort').value;
+
+    let shown = all.filter(t =>
+      category === "All" ||
+      (t.category || "Other").toLowerCase() === category.toLowerCase()
+    );
+
+    if (sorting === "newest") {
+      shown.sort((a, b) =>
+        (b.date || "").localeCompare(a.date || "")
+      );
+    } else if (sorting === "oldest") {
+      shown.sort((a, b) =>
+        (a.date || "9999").localeCompare(b.date || "9999")
+      );
+    } else {
+      shown.sort((a, b) =>
+        (a.title || "").localeCompare(b.title || "")
+      );
+    }
+
+    $('#galleryItems').innerHTML = shown.length
+      ? shown.map(tileHTML).join('')
+      : '<div class="emptymsg">NO TICKETS FOUND.</div>';
+
+    connectTiles();
+  }
+
+  $('#galleryFilter').onchange = updateGallery;
+  $('#gallerySort').onchange = updateGallery;
+
+  $('#bulkImport').onclick = () => $('#bulkInput').click();
+
+  if ($('#showAll')) {
+    $('#showAll').onclick = () => {
+      EP.dateFilter = null;
+      render();
+    };
+  }
+
+  updateGallery();
 }
+
 function newTicket(date=''){
   EP.current={id:(crypto.randomUUID?crypto.randomUUID():String(Date.now())+Math.random()),date,title:'',venue:'',category:'Other',notes:'',image:'',drawing:'',rawText:''};
   EP.image=''; EP.view='scan';render();
