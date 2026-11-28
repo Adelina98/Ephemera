@@ -1690,40 +1690,14 @@ async function generateAnnualReceipt(tickets, favorite, note) {
   rule();
 
   // THE CHOSEN TICKET IN CONTEXT
-  heading("04 / THIS MEMORY IN CONTEXT");
-
-  pair(
-    "CATEGORY RECORDS",
-    `${categoryCount} / ${tickets.length}`
-  );
-
-  if (favoriteCategory && tickets.length) {
-    pair(
-      "SHARE OF THE YEAR",
-      `${Math.round(categoryCount / tickets.length * 100)}%`
-    );
-  }
-
-  pair(
-    `${favoriteMonth} RECORDS`,
-    String(monthCount).padStart(2, "0")
-  );
-
-  y += 20;
-  rule();
+  
 
   // FOOTER
-  centered("ONE YEAR.", 21, true);
-  y += 34;
+  
+  // FOOTER
+  centered("ephemera.", 36, true);
+  y += 48;
 
-  centered("ONE MEMORY.", 21, true);
-  y += 49;
-
-  centered("COLLECTED, NOT FORGOTTEN.", 16);
-  y += 30;
-
-  centered("THANK YOU FOR KEEPING.", 14);
-  y += 30;
 
   // Crop blank canvas space.
   const finalHeight = Math.min(
