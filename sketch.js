@@ -675,3 +675,662 @@ const overviewInstaller = setInterval(() => {
     clearInterval(overviewInstaller);
   }
 }, 100);
+
+/* ============================================
+   EPHEMERA — INTERACTIVE ANNUAL RECAP
+   Uses existing archive100 and tickets.json
+============================================ */
+
+const annual = {
+  step: 0,
+  year: "ALL",
+  mode: "month",
+  favorite: null
+};
+
+const annualSteps = [
+  "THE COLLECTION",
+  "SELECT A YEAR",
+  "REARRANGE YOUR YEAR",
+  "ONE TO KEEP"
+];
+
+function annualRecords() {
+  return typeof archive100 !== "undefined"
+    ? archive100
+    : [];
+}
+
+function annualYears() {
+  return [...new Set(
+    annualRecords()
+      .map(t => String(t.date || "").slice(0, 4))
+      .filter(y => /^\d{4}$/.test(y))
+  )].sort((a, b) => b.localeCompare(a));
+}
+
+function annualSelected() {
+  if (annual.year === "ALL") return annualRecords();
+
+  return annualRecords().filter(t =>
+    String(t.date || "").startsWith(annual.year + "-")
+  );
+}
+
+function annualStats() {
+  const records = annualSelected();
+  const months = Array(12).fill(0);
+  const categories = {};
+  const venues = {};
+
+  records.forEach(t => {
+    const m = Number(String(t.date || "").slice(5, 7));
+
+    if (m >= 1 && m <= 12) months[m - 1]++;
+
+    const c = t.category || "Other";
+    const v = t.venue || "Unknown";
+
+    categories[c] = (categories[c] || 0) + 1;
+    venues[v] = (venues[v] || 0) + 1;
+  });
+
+  return { months, categories, venues };
+}
+
+function annualSort(items) {
+  const copy = [...items];
+
+  if (annual.mode === "category") {
+    return copy.sort((a, b) =>
+      String(a.category || "Other").localeCompare(
+        String(b.category || "Other")
+      ) ||
+      String(a.date || "").localeCompare(
+        String(b.date || "")
+      )
+    );
+  }
+
+  return copy.sort((a, b) =>
+    String(a.date || "9999").localeCompare(
+      String(b.date || "9999")
+    )
+  );
+}
+
+function renderAnnual() {
+  const area = document.getElementById("epContent");
+  if (!area) return;
+
+  const records = annualRecords();
+  const years = annualYears();
+  const stats = annualStats();
+
+  if (!records.length) {
+    area.innerHTML = `
+      <section class="annual-empty">
+        <h1>Annual Recap.</h1>
+        <p>No archive data loaded yet.</p>
+        <p>Please check tickets.json.</p>
+      </section>
+    `;
+    return;
+  }
+
+  let intro = "";
+
+  if (annual.step === 0) {
+    intro = `
+      <h1>The Entire Collection.</h1>
+      <p>${records.length} OBJECTS / ALL YEARS</p>
+    `;
+  }
+
+  if (annual.step === 1) {
+    intro = `
+      <h1>Choose a year.</h1>
+      <p>Watch your collection change over time.</p>
+    `;
+  }
+
+  if (annual.step === 2) {
+    intro = `
+      <h1>${annual.year}.</h1>
+      <p>${annualSelected().length} EXPERIENCES RECORDED</p>
+    `;
+  }
+
+  if (annual.step === 3) {
+    intro = `
+      <h1>One to Keep.</h1>
+      <p>Which experience would you choose to remember?</p>
+    `;
+  }
+
+  const barItems = Object.entries(
+    annual.mode === "category"
+      ? stats.categories
+      : Object.fromEntries(
+          stats.months.map((v, i) => [
+            String(i + 1).padStart(2, "0"),
+            v
+          ])
+        )
+  ).sort((a, b) =>
+    annual.mode === "category"
+      ? b[1] - a[1]
+      : a[0].localeCompare(b[0])
+  );
+
+  const max = Math.max(1, ...barItems.map(x => x[1]));
+
+  area.innerHTML = `
+    <section class="annual-wrap">
+
+      <div class="annual-header">
+        <span>EPHEMERA / ANNUAL RECAP</span>
+        <span>${annual.step + 1} / 4</span>
+      </div>
+
+      <div class="annual-heading">
+        ${intro}
+      </div>
+
+      <div class="annual-controls">
+
+        ${annual.step >= 1 ? `
+          <label>
+            YEAR
+            <select id="annualYear">
+              <option value="ALL">ALL YEARS</option>
+              ${years.map(y => `
+                <option value="${y}"
+                  ${annual.year === y ? "selected" : ""}>
+                  ${y}
+                </option>
+              `).join("")}
+            </select>
+          </label>
+        ` : ""}
+
+        ${annual.step === 2 ? `
+          <label>
+            ARRANGE BY
+            <select id="annualMode">
+              <option value="month"
+                ${annual.mode === "month" ? "selected" : ""}>
+                MONTH
+              </option>
+              <option value="category"
+                ${annual.mode === "category" ? "selected" : ""}>
+                CATEGORY
+              </option>
+            </select>
+          </label>
+        ` : ""}
+
+        <span id="annualCount"></span>
+      </div>
+
+      <div id="annualGrid" class="annual-grid">
+        ${records.map((t, i) => `
+          <button class="annual-ticket"
+            data-index="${i}"
+            title="${archiveText(t.title || "Untitled")}">
+            <img
+              src="${archiveText(t.image || "")}"
+              alt="${archiveText(t.title || "Ticket")}"
+              loading="lazy">
+          </button>
+        `).join("")}
+      </div>
+
+      ${annual.step === 2 ? `
+        <div class="annual-stats">
+          <h2>YOUR PATTERNS</h2>
+
+          ${barItems.map(([label, count]) => `
+            <div class="annual-stat">
+              <span>${archiveText(label)}</span>
+              <div class="annual-track">
+                <div style="width:${count / max * 100}%"></div>
+              </div>
+              <span>${count}</span>
+            </div>
+          `).join("")}
+
+          <p>Recorded visits: ${annualSelected().length}</p>
+        </div>
+      ` : ""}
+
+      ${annual.step === 3 ? `
+        <div id="annualMemory" class="annual-memory">
+          SELECT A TICKET ABOVE
+        </div>
+      ` : ""}
+
+      <div class="annual-navigation">
+        <button id="annualPrev">← PREVIOUS</button>
+        <span>${annualSteps[annual.step]}</span>
+        <button id="annualNext">
+          ${annual.step === 3 ? "START AGAIN" : "NEXT →"}
+        </button>
+      </div>
+
+    </section>
+  `;
+
+  const yearSelect = document.getElementById("annualYear");
+
+  if (yearSelect) {
+    yearSelect.onchange = e => {
+      annual.year = e.target.value;
+      updateAnnualGrid();
+    };
+  }
+
+  const modeSelect = document.getElementById("annualMode");
+
+  if (modeSelect) {
+    modeSelect.onchange = e => {
+      annual.mode = e.target.value;
+      updateAnnualGrid();
+      updateAnnualStats();
+    };
+  }
+
+  document.getElementById("annualPrev").onclick = () => {
+    annual.step = Math.max(0, annual.step - 1);
+    renderAnnual();
+  };
+
+  document.getElementById("annualNext").onclick = () => {
+    annual.step = (annual.step + 1) % 4;
+    renderAnnual();
+  };
+
+  document.querySelectorAll(".annual-ticket").forEach(btn => {
+    btn.onclick = () => {
+      const ticket = records[Number(btn.dataset.index)];
+
+      if (annual.step === 3) {
+        annual.favorite = ticket.id;
+        updateAnnualGrid();
+        showAnnualMemory(ticket);
+      } else {
+        if (typeof openTicket === "function") {
+          openTicket(ticket.id);
+        }
+      }
+    };
+  });
+
+  updateAnnualGrid();
+}
+
+function updateAnnualGrid() {
+  const grid = document.getElementById("annualGrid");
+  if (!grid) return;
+
+  const all = annualRecords();
+  const selected = annualSelected();
+  const selectedIds = new Set(selected.map(t => t.id));
+  const order = annualSort(selected);
+
+  const positions = new Map();
+
+  grid.querySelectorAll(".annual-ticket").forEach(el => {
+    positions.set(el, el.getBoundingClientRect());
+  });
+
+  const indexOrder = new Map(
+    order.map((t, i) => [t.id, i])
+  );
+
+  grid.querySelectorAll(".annual-ticket").forEach(el => {
+    const t = all[Number(el.dataset.index)];
+    const active = selectedIds.has(t.id);
+
+    el.style.order = indexOrder.has(t.id)
+      ? indexOrder.get(t.id)
+      : all.length + Number(el.dataset.index);
+
+    el.style.opacity = active ? "1" : "0.12";
+
+    el.classList.toggle(
+      "annual-favorite",
+      annual.step === 3 && t.id === annual.favorite
+    );
+  });
+
+  // Animate changes in ticket positions.
+  requestAnimationFrame(() => {
+    grid.querySelectorAll(".annual-ticket").forEach(el => {
+      const before = positions.get(el);
+      const after = el.getBoundingClientRect();
+
+      if (!before) return;
+
+      const dx = before.left - after.left;
+      const dy = before.top - after.top;
+
+      if (Math.abs(dx) + Math.abs(dy) > 1 &&
+          typeof el.animate === "function") {
+        el.animate([
+          { transform: `translate(${dx}px, ${dy}px)` },
+          { transform: "translate(0, 0)" }
+        ], {
+          duration: 650,
+          easing: "ease-in-out"
+        });
+      }
+    });
+  });
+
+  const counter = document.getElementById("annualCount");
+  if (counter) {
+    counter.textContent =
+      `${selected.length} / ${all.length} TICKETS`;
+  }
+}
+
+function updateAnnualStats() {
+  if (annual.step !== 2) return;
+
+  // Refresh the statistics for the new grouping.
+  renderAnnual();
+}
+
+function showAnnualMemory(ticket) {
+  const box = document.getElementById("annualMemory");
+  if (!box) return;
+
+  box.innerHTML = `
+    <div class="annual-memory-image">
+      <img src="${archiveText(ticket.image || "")}"
+           alt="Selected ticket">
+    </div>
+    <div>
+      <span>THE ONE I CHOSE TO KEEP</span>
+      <h2>${archiveText(ticket.title || "Untitled")}</h2>
+      <p>${archiveText(ticket.date || "DATE UNKNOWN")}</p>
+      <p>${archiveText(ticket.venue || "")}</p>
+      <textarea id="annualNote"
+        placeholder="Why does this memory matter to you?"></textarea>
+      <button id="annualSaveMemory">
+        SAVE MY MEMORY
+      </button>
+      <p id="annualSavedStatus"></p>
+    </div>
+  `;
+
+  const key = `ephemera-memory-${ticket.id}`;
+
+  try {
+    document.getElementById("annualNote").value =
+      localStorage.getItem(key) || "";
+  } catch (e) {}
+
+  document.getElementById("annualSaveMemory").onclick = () => {
+    try {
+      localStorage.setItem(
+        key,
+        document.getElementById("annualNote").value
+      );
+      document.getElementById("annualSavedStatus")
+        .textContent = "MEMORY SAVED";
+    } catch (e) {
+      document.getElementById("annualSavedStatus")
+        .textContent = "COULD NOT SAVE";
+    }
+  };
+}
+
+/* STYLE */
+
+const annualStyle = document.createElement("style");
+
+annualStyle.textContent = `
+  .annual-wrap {
+    max-width: 1450px;
+    margin: 25px auto;
+    color: #111;
+    font-family: Arial, Helvetica, sans-serif;
+  }
+
+  .annual-header,
+  .annual-navigation {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 15px;
+    padding: 18px 0;
+    border-top: 1px solid #111;
+    font-size: 11px;
+    letter-spacing: .06em;
+  }
+
+  .annual-heading {
+    margin: 45px 0 30px;
+  }
+
+  .annual-heading h1 {
+    font-size: clamp(36px, 6vw, 76px);
+    font-weight: 400;
+    letter-spacing: -.055em;
+    line-height: 1.1;
+    margin: 0 0 16px;
+  }
+
+  .annual-heading p {
+    font-size: 12px;
+    color: #777;
+  }
+
+  .annual-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: end;
+    gap: 20px;
+    margin-bottom: 25px;
+    font-size: 11px;
+  }
+
+  .annual-controls label {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .annual-controls select {
+    background: #fff;
+    color: #111;
+    border: 1px solid #ccc;
+    border-radius: 0;
+    padding: 10px 15px;
+    font-size: 12px;
+  }
+
+  #annualCount {
+    margin-left: auto;
+  }
+
+  .annual-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-content: flex-start;
+    margin: 20px 0 60px;
+  }
+
+  .annual-ticket {
+    width: calc((100% - 54px) / 10);
+    height: 95px;
+    border: 0;
+    padding: 0;
+    background: transparent;
+    cursor: pointer;
+    transition: opacity .45s ease;
+  }
+
+  .annual-ticket img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+
+  .annual-ticket:hover img {
+    transform: scale(1.08);
+  }
+
+  .annual-ticket.annual-favorite {
+    outline: 3px solid #111;
+    outline-offset: 2px;
+  }
+
+  .annual-stats {
+    border-top: 1px solid #111;
+    padding: 30px 0 50px;
+  }
+
+  .annual-stats h2 {
+    font-size: 18px;
+    font-weight: 400;
+    margin-bottom: 28px;
+  }
+
+  .annual-stat {
+    display: grid;
+    grid-template-columns: 135px 1fr 30px;
+    align-items: center;
+    gap: 14px;
+    margin: 10px 0;
+    font-size: 11px;
+  }
+
+  .annual-track {
+    height: 8px;
+    background: #eee;
+  }
+
+  .annual-track div {
+    height: 100%;
+    background: #111;
+  }
+
+  .annual-memory {
+    border-top: 1px solid #111;
+    padding: 35px 0;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 30px;
+    font-size: 12px;
+  }
+
+  .annual-memory-image img {
+    max-width: 100%;
+    max-height: 350px;
+    object-fit: contain;
+  }
+
+  .annual-memory h2 {
+    font-size: 28px;
+    font-weight: 400;
+    line-height: 1.3;
+  }
+
+  .annual-memory textarea {
+    display: block;
+    box-sizing: border-box;
+    width: 100%;
+    height: 110px;
+    margin: 20px 0;
+    padding: 12px;
+    border: 1px solid #ccc;
+    background: white;
+    color: #111;
+    font: inherit;
+  }
+
+  .annual-memory button,
+  .annual-navigation button {
+    border: 1px solid #111;
+    background: white;
+    color: #111;
+    padding: 12px 16px;
+    cursor: pointer;
+    font-size: 11px;
+  }
+
+  .annual-empty {
+    padding: 70px 20px;
+  }
+
+  @media (max-width: 700px) {
+    .annual-ticket {
+      width: calc((100% - 24px) / 5);
+      height: 80px;
+    }
+
+    .annual-memory {
+      grid-template-columns: 1fr;
+    }
+
+    .annual-stat {
+      grid-template-columns: 80px 1fr 25px;
+      gap: 8px;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .annual-ticket {
+      transition: none;
+    }
+  }
+`;
+
+document.head.appendChild(annualStyle);
+
+/* INSTALL MENU */
+
+let annualInstallAttempts = 0;
+
+const annualInstaller = setInterval(() => {
+  annualInstallAttempts++;
+
+  const overviewButton =
+    document.getElementById("overviewTab");
+
+  if (overviewButton &&
+      !document.getElementById("annualTab")) {
+
+    const btn = document.createElement("button");
+
+    btn.id = "annualTab";
+    btn.className = "btn";
+    btn.textContent = "ANNUAL RECAP";
+
+    overviewButton.insertAdjacentElement("afterend", btn);
+
+    btn.onclick = () => {
+      if (typeof stopCamera === "function") {
+        stopCamera();
+      }
+
+      annual.step = 0;
+      annual.year = "ALL";
+      annual.favorite = null;
+
+      renderAnnual();
+    };
+
+    clearInterval(annualInstaller);
+  }
+
+  if (annualInstallAttempts > 100) {
+    clearInterval(annualInstaller);
+  }
+}, 100);
+
