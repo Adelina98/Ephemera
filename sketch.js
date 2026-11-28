@@ -1114,10 +1114,17 @@ function showAnnualMemory(ticket) {
       <p>${archiveText(ticket.venue || "")}</p>
       <textarea id="annualNote"
         placeholder="Why does this memory matter to you?"></textarea>
-      <button id="annualSaveMemory">
-        SAVE MY MEMORY
-      </button>
-      <p id="annualSavedStatus"></p>
+      
+<button id="annualSaveMemory">
+  SAVE MY MEMORY
+</button>
+
+<button id="annualReceiptButton">
+  GENERATE RECEIPT →
+</button>
+
+<p id="annualSavedStatus"></p>
+
     </div>
   `;
 
@@ -1389,4 +1396,398 @@ const annualInstaller = setInterval(() => {
     clearInterval(annualInstaller);
   }
 }, 100);
+
+/* ============================================
+   EPHEMERA — ANNUAL MEMORY RECEIPT
+   Generates a printable PNG receipt
+============================================ */
+
+document.addEventListener("click", function (event) {
+  if (event.target.id !== "annualReceiptButton") return;
+
+  if (annual.year === "ALL") {
+    alert("Please select a specific year first.");
+    return;
+  }
+
+  const tickets = annualSelected();
+
+  const favorite = annualRecords().find(
+    t => t.id === annual.favorite
+  );
+
+  if (!favorite || !tickets.some(t => t.id === favorite.id)) {
+    alert("Please choose one ticket from the selected year.");
+    return;
+  }
+
+  const note =
+    document.getElementById("annualNote")?.value || "";
+
+  try {
+    localStorage.setItem(
+      `ephemera-memory-${favorite.id}`,
+      note
+    );
+  } catch (e) {
+    console.warn("Memory could not be stored:", e);
+  }
+
+  generateAnnualReceipt(tickets, favorite, note);
+});
+
+
+function generateAnnualReceipt(tickets, favorite, note) {
+  const year = annual.year;
+  const stats = annualStats();
+
+  const width = 640;
+  const margin = 48;
+  const right = width - margin;
+
+  const categories = Object.entries(stats.categories)
+    .sort((a, b) => b[1] - a[1]);
+
+  // Temporary canvas for measuring text.
+  const measureCanvas = document.createElement("canvas");
+  const measure = measureCanvas.getContext("2d");
+
+  function wrapLines(value, maxWidth, font) {
+    measure.font = font;
+
+    const lines = [];
+    const paragraphs = String(value || "").split("\n");
+
+    paragraphs.forEach(paragraph => {
+      let line = "";
+
+      for (const word of paragraph.split(/\s+/).filter(Boolean)) {
+        const test = line ? line + " " + word : word;
+
+        if (measure.measureText(test).width > maxWidth && line) {
+          lines.push(line);
+          line = word;
+        } else {
+          line = test;
+        }
+      }
+
+      lines.push(line);
+    });
+
+    return lines;
+  }
+
+  function shorten(value, maxWidth, font) {
+    measure.font = font;
+    let result = String(value || "");
+
+    while (
+      result.length &&
+      measure.measureText(result).width > maxWidth
+    ) {
+      result = result.slice(0, -1);
+    }
+
+    return result === value ? result : result.trimEnd() + "…";
+  }
+
+  const noteLines = wrapLines(
+    note || "A memory worth keeping.",
+    width - margin * 2,
+    "18px monospace"
+  );
+
+  const height =
+    880 +
+    categories.length * 32 +
+    tickets.length * 51 +
+    noteLines.length * 27;
+
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+
+  const ctx = canvas.getContext("2d");
+
+  // White receipt background.
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, width, height);
+
+  ctx.fillStyle = "#111111";
+  ctx.textBaseline = "top";
+
+  let y = 45;
+
+  function text(value, x, size = 18, align = "left", bold = false) {
+    ctx.font = `${bold ? "bold " : ""}${size}px monospace`;
+    ctx.textAlign = align;
+    ctx.fillText(String(value), x, y);
+  }
+
+  function center(value, size = 18, bold = false) {
+    text(value, width / 2, size, "center", bold);
+  }
+
+  function pair(left, value, size = 17) {
+    text(left, margin, size);
+    text(value, right, size, "right");
+    y += 30;
+  }
+
+  function line() {
+    ctx.beginPath();
+    ctx.moveTo(margin, y);
+    ctx.lineTo(right, y);
+    ctx.strokeStyle = "#111111";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    y += 25;
+  }
+
+  function dashed() {
+    ctx.save();
+    ctx.setLineDash([6, 6]);
+    line();
+    ctx.restore();
+  }
+
+  function section(title) {
+    y += 12;
+    text(title, margin, 18, "left", true);
+    y += 40;
+  }
+
+  // RECEIPT HEADER
+  center("ephemera.", 46, true);
+  y += 69;
+
+  center("ANNUAL MEMORY RECEIPT", 18);
+  y += 30;
+
+  center("A PERSONAL ARCHIVE OF EXPERIENCES", 14);
+  y += 44;
+
+  line();
+
+  pair("YEAR", year, 21);
+  pair("TOTAL EXPERIENCES", tickets.length, 18);
+
+  y += 10;
+  dashed();
+
+  // CATEGORY BREAKDOWN
+  section("YOUR EXPERIENCES");
+
+  categories.forEach(([category, count]) => {
+    pair(
+      shorten(category.toUpperCase(), 340, "17px monospace"),
+      String(count).padStart(2, "0")
+    );
+  });
+
+  y += 15;
+  line();
+
+  // MONTHLY ACTIVITY
+  section("MONTHLY ACTIVITY");
+
+  stats.months.forEach((count, index) => {
+    const month = String(index + 1).padStart(2, "0");
+    const bar = "#".repeat(Math.min(count, 20));
+
+    pair(`${month}  ${bar}`, String(count).padStart(2, "0"), 16);
+  });
+
+  y += 12;
+  line();
+
+  // ALL TICKET RECORDS
+  section("ITEMIZED MEMORIES");
+
+  const sorted = [...tickets].sort((a, b) =>
+    String(a.date || "").localeCompare(String(b.date || ""))
+  );
+
+  sorted.forEach((ticket, index) => {
+    const number = String(index + 1).padStart(3, "0");
+    const date = ticket.date || "UNDATED";
+
+    text(`${number}  ${date}`, margin, 15);
+    y += 22;
+
+    text(
+      shorten(ticket.title || "Untitled", 500, "17px monospace"),
+      margin + 20,
+      17
+    );
+
+    y += 29;
+  });
+
+  y += 15;
+  dashed();
+
+  // ONE TO KEEP
+  section("ONE TO KEEP");
+
+  const favoriteTitle = wrapLines(
+    favorite.title || "Untitled",
+    width - margin * 2,
+    "bold 19px monospace"
+  );
+
+  favoriteTitle.forEach(item => {
+    text(item, margin, 19, "left", true);
+    y += 27;
+  });
+
+  text(favorite.date || "DATE UNKNOWN", margin, 16);
+  y += 40;
+
+  text("YOUR MEMORY", margin, 15, "left", true);
+  y += 30;
+
+  noteLines.forEach(item => {
+    text(item, margin, 18);
+    y += 27;
+  });
+
+  y += 25;
+  line();
+
+  // TOTAL
+  pair("TOTAL MEMORIES KEPT", tickets.length, 21);
+
+  y += 28;
+
+  // Decorative barcode, not a scannable code.
+  const barcodeText =
+    year + tickets.length + String(favorite.id);
+
+  let bx = margin + 32;
+
+  for (let i = 0; i < 115; i++) {
+    const code = barcodeText.charCodeAt(
+      i % barcodeText.length
+    );
+
+    const barWidth = (code + i) % 3 + 1;
+
+    ctx.fillStyle = "#111111";
+    ctx.fillRect(
+      bx,
+      y,
+      barWidth,
+      70
+    );
+
+    bx += barWidth + 2;
+
+    if (bx > right - 25) break;
+  }
+
+  y += 95;
+
+  center(`EPHEMERA / ${year}`, 16);
+  y += 32;
+
+  center("COLLECTED, NOT FORGOTTEN.", 17, true);
+  y += 32;
+
+  center("THANK YOU FOR KEEPING.", 15);
+
+  // Crop to the actual receipt height.
+  const finalCanvas = document.createElement("canvas");
+  finalCanvas.width = width;
+  finalCanvas.height = Math.ceil(y + 65);
+
+  const finalCtx = finalCanvas.getContext("2d");
+  finalCtx.fillStyle = "#ffffff";
+  finalCtx.fillRect(0, 0, finalCanvas.width, finalCanvas.height);
+  finalCtx.drawImage(canvas, 0, 0);
+
+  const imageURL = finalCanvas.toDataURL("image/png");
+
+  showReceiptPreview(imageURL, year);
+}
+
+
+// RECEIPT PREVIEW AND DOWNLOAD
+
+function showReceiptPreview(imageURL, year) {
+  document.getElementById("receiptOverlay")?.remove();
+
+  const overlay = document.createElement("div");
+  overlay.id = "receiptOverlay";
+
+  Object.assign(overlay.style, {
+    position: "fixed",
+    inset: "0",
+    zIndex: "99999",
+    background: "rgba(0,0,0,0.83)",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    overflowY: "auto",
+    padding: "35px 20px"
+  });
+
+  const controls = document.createElement("div");
+
+  Object.assign(controls.style, {
+    display: "flex",
+    justifyContent: "space-between",
+    width: "100%",
+    maxWidth: "380px",
+    marginBottom: "18px",
+    gap: "12px"
+  });
+
+  const close = document.createElement("button");
+  close.textContent = "✕ CLOSE";
+
+  const download = document.createElement("button");
+  download.textContent = "↓ DOWNLOAD PNG";
+
+  [close, download].forEach(btn => {
+    Object.assign(btn.style, {
+      background: "#ffffff",
+      color: "#111111",
+      border: "none",
+      borderRadius: "0",
+      padding: "12px 16px",
+      fontFamily: "Arial, sans-serif",
+      fontSize: "11px",
+      cursor: "pointer"
+    });
+  });
+
+  close.onclick = () => overlay.remove();
+
+  download.onclick = () => {
+    const link = document.createElement("a");
+    link.href = imageURL;
+    link.download = `ephemera-receipt-${year}.png`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  };
+
+  controls.append(close, download);
+
+  const image = document.createElement("img");
+  image.src = imageURL;
+  image.alt = `${year} Annual Memory Receipt`;
+
+  Object.assign(image.style, {
+    width: "100%",
+    maxWidth: "380px",
+    height: "auto",
+    boxShadow: "0 10px 50px rgba(0,0,0,0.25)"
+  });
+
+  overlay.append(controls, image);
+  document.body.appendChild(overlay);
+}
 
