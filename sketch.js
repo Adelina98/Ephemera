@@ -368,3 +368,310 @@ async function saveTicket(){try{
   EP.dateFilter=null;EP.view='calendar';render();
 }catch(err){setStatus('Could not save: '+err.message);}}
 function exportPNG(){drawPage();const a=document.createElement('a');a.download=`ephemera-${EP.current.date||'undated'}.png`;a.href=$('#journalCanvas').toDataURL('image/png');a.click();}
+
+/* ==========================================
+   EPHEMERA — ALL TICKETS OVERVIEW
+   100 Tickets / Complete Collection
+========================================== */
+
+let archive100 = [];
+
+function archiveText(value) {
+  return String(value ?? "").replace(/[&<>"']/g, c => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;"
+  }[c]));
+}
+
+function archiveImagePath(row) {
+  const name =
+    row.image || row.filename || row.file ||
+    row.image_file || "";
+
+  if (!name) return "";
+
+  if (
+    name.startsWith("data:") ||
+    name.startsWith("https://") ||
+    name.startsWith("http://")
+  ) {
+    return name;
+  }
+
+  if (
+    name.startsWith("tickets/") ||
+    name.startsWith("./tickets/")
+  ) {
+    return name;
+  }
+
+  return "tickets/" + name.split("/").pop();
+}
+
+/* LOAD 100 TICKETS */
+
+async function loadArchive100() {
+  try {
+    const response = await fetch("./tickets.json", {
+      cache: "no-store"
+    });
+
+    if (!response.ok) {
+      throw new Error("tickets.json not found");
+    }
+
+    const json = await response.json();
+
+    const rows = Array.isArray(json)
+      ? json
+      : (json.tickets || json.items || []);
+
+    archive100 = rows.map((t, i) => ({
+      ...t,
+      id: "archive-" + (t.id ?? i + 1),
+      title: t.title || t.name || "Untitled",
+      date: t.date || t.visit_date || "",
+      venue: t.venue || t.location || "",
+      category: t.category || "Other",
+      image: archiveImagePath(t)
+    }));
+
+    console.log("Archive loaded:", archive100.length);
+
+    // Merge with existing ticket records.
+    if (typeof EP !== "undefined" &&
+        Array.isArray(EP.tickets)) {
+
+      const existing = new Set(
+        EP.tickets.map(t => String(t.id))
+      );
+
+      for (const ticket of archive100) {
+        if (!existing.has(String(ticket.id))) {
+          EP.tickets.push(ticket);
+        }
+      }
+    }
+
+  } catch (error) {
+    console.error("Archive loading error:", error);
+  }
+}
+
+/* RENDER ALL 100 */
+
+function renderAllTickets() {
+  const area = document.getElementById("epContent");
+  if (!area) return;
+
+  area.innerHTML = `
+    <section class="overview-wrap">
+
+      <div class="overview-head">
+        <div>
+          <p>EPHEMERA / COMPLETE COLLECTION</p>
+          <h1>The Entire Collection.</h1>
+          <p>${archive100.length} ARCHIVED OBJECTS</p>
+        </div>
+
+        <button id="overviewSize" class="btn">
+          CHANGE VIEW
+        </button>
+      </div>
+
+      <div id="overviewGrid" class="overview-grid">
+
+        ${archive100.map(t => `
+          <button
+            class="overview-ticket"
+            data-overview-id="${archiveText(t.id)}"
+            title="${archiveText(t.title)}"
+          >
+            <img
+              src="${archiveText(t.image)}"
+              alt="${archiveText(t.title)}"
+              loading="lazy"
+            >
+          </button>
+        `).join("")}
+
+      </div>
+    </section>
+  `;
+
+  // Open selected ticket.
+  document.querySelectorAll("[data-overview-id]")
+    .forEach(btn => {
+      btn.onclick = () => {
+        if (typeof openTicket === "function") {
+          openTicket(btn.dataset.overviewId);
+        }
+      };
+    });
+
+  // Toggle overview size.
+  const sizeButton = document.getElementById("overviewSize");
+
+  sizeButton.onclick = () => {
+    document.getElementById("overviewGrid")
+      .classList.toggle("overview-large");
+  };
+}
+
+/* ADD ALL 100 BUTTON */
+
+function installOverview() {
+  const galleryButton =
+    document.getElementById("gridTab");
+
+  if (!galleryButton) return false;
+
+  if (document.getElementById("overviewTab")) {
+    return true;
+  }
+
+  const button = document.createElement("button");
+
+  button.id = "overviewTab";
+  button.className = "btn";
+  button.textContent = "ALL 100";
+
+  galleryButton.insertAdjacentElement(
+    "afterend", button
+  );
+
+  button.onclick = () => {
+    if (typeof stopCamera === "function") {
+      stopCamera();
+    }
+
+    EP.dateFilter = null;
+    renderAllTickets();
+  };
+
+  return true;
+}
+
+/* BLACK & WHITE DESIGN */
+
+const overviewCSS = document.createElement("style");
+
+overviewCSS.textContent = `
+
+  .overview-wrap {
+    max-width: 1600px;
+    margin: 30px auto;
+    color: #111111;
+    font-family: Arial, Helvetica, sans-serif;
+  }
+
+  .overview-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: end;
+    gap: 20px;
+    border-bottom: 1px solid #111111;
+    padding-bottom: 22px;
+    margin-bottom: 30px;
+  }
+
+  .overview-head h1 {
+    font-size: clamp(30px, 5vw, 55px);
+    font-weight: 400;
+    letter-spacing: -0.04em;
+    margin: 10px 0;
+  }
+
+  .overview-head p {
+    font-size: 11px;
+    color: #777777;
+    letter-spacing: 0.05em;
+  }
+
+  .overview-grid {
+    display: grid;
+    grid-template-columns:
+      repeat(10, minmax(0, 1fr));
+    gap: 7px;
+    align-items: center;
+  }
+
+  .overview-ticket {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    margin: 0;
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+    min-width: 0;
+  }
+
+  .overview-ticket img {
+    display: block;
+    width: 100%;
+    height: auto;
+    max-height: 160px;
+    object-fit: contain;
+    transition:
+      transform 0.25s ease,
+      opacity 0.25s ease;
+  }
+
+  .overview-ticket:hover img {
+    transform: scale(1.08);
+    opacity: 0.8;
+  }
+
+  .overview-grid.overview-large {
+    grid-template-columns:
+      repeat(5, minmax(0, 1fr));
+    gap: 18px;
+  }
+
+  .overview-grid.overview-large img {
+    max-height: 240px;
+  }
+
+  @media (max-width: 700px) {
+    .overview-grid {
+      grid-template-columns:
+        repeat(4, minmax(0, 1fr));
+      gap: 5px;
+    }
+
+    .overview-grid.overview-large {
+      grid-template-columns:
+        repeat(2, minmax(0, 1fr));
+    }
+
+    .overview-head {
+      align-items: start;
+    }
+  }
+
+`;
+
+document.head.appendChild(overviewCSS);
+
+/* INITIALIZE */
+
+let overviewAttempts = 0;
+
+const overviewInstaller = setInterval(() => {
+  overviewAttempts++;
+
+  if (installOverview()) {
+    clearInterval(overviewInstaller);
+
+    loadArchive100();
+  }
+
+  if (overviewAttempts > 100) {
+    clearInterval(overviewInstaller);
+  }
+}, 100);
