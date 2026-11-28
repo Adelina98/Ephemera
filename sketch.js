@@ -1005,6 +1005,10 @@ yearSelect.onchange = e => {
   document.querySelectorAll(".annual-ticket").forEach(btn => {
     btn.onclick = () => {
       const ticket = records[Number(btn.dataset.index)];
+       
+if (annual.year !== "ALL" &&
+    !String(ticket.date || "").startsWith(annual.year + "-")) return;
+
 
       if (annual.step === 3) {
         annual.favorite = ticket.id;
