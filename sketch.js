@@ -833,10 +833,13 @@ if (annual.step === 0) {
     annual.mode === "category"
       ? stats.categories
       : Object.fromEntries(
-          stats.months.map((v, i) => [
-            String(i + 1).padStart(2, "0"),
-            v
-          ])
+          
+stats.months.map((v, i) => [
+  ["JAN", "FEB", "MAR", "APR", "MAY", "JUN",
+   "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"][i],
+  v
+])
+
         )
   ).sort((a, b) =>
     annual.mode === "category"
@@ -911,7 +914,10 @@ ${annual.step >= 0 ? `
 
       ${annual.step === 2 ? `
         <div class="annual-stats">
-          <h2>YOUR PATTERNS</h2>
+          
+<h2>${annual.mode === "month"
+  ? "YOUR YEAR IN MONTHS"
+  : "YOUR YEAR BY CATEGORY"}</h2>
 
           ${barItems.map(([label, count]) => `
             <div class="annual-stat">
@@ -923,7 +929,9 @@ ${annual.step >= 0 ? `
             </div>
           `).join("")}
 
-          <p>Recorded visits: ${annualSelected().length}</p>
+          
+<p>${annualSelected().length} EXPERIENCES RECORDED IN ${annual.year === "ALL" ? "ALL YEARS" : annual.year}</p>
+
         </div>
       ` : ""}
 
@@ -1437,281 +1445,294 @@ document.addEventListener("click", function (event) {
 });
 
 
-function generateAnnualReceipt(tickets, favorite, note) {
+
+/* EPHEMERA — PERSONAL ANNUAL RECEIPT */
+
+async function generateAnnualReceipt(tickets, favorite, note) {
   const year = annual.year;
   const stats = annualStats();
 
-  const width = 640;
-  const margin = 48;
-  const right = width - margin;
+  const W = 640;
+  const P = 48;
+  const R = W - P;
 
-  const categories = Object.entries(stats.categories)
-    .sort((a, b) => b[1] - a[1]);
+  const canvas = document.createElement("canvas");
+  canvas.width = W;
+  canvas.height = 5000;
 
-  // Temporary canvas for measuring text.
-  const measureCanvas = document.createElement("canvas");
-  const measure = measureCanvas.getContext("2d");
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(0, 0, W, canvas.height);
+  ctx.fillStyle = "#111";
+  ctx.textBaseline = "top";
 
-  function wrapLines(value, maxWidth, font) {
-    measure.font = font;
+  const sans = "Arial, 'Apple SD Gothic Neo', sans-serif";
+  const mono = "monospace";
 
+  let y = 48;
+
+  function font(size = 18, bold = false, family = sans) {
+    ctx.font = `${bold ? "bold " : ""}${size}px ${family}`;
+  }
+
+  function txt(value, x = P, size = 18, bold = false,
+               align = "left", family = sans) {
+    font(size, bold, family);
+    ctx.textAlign = align;
+    ctx.fillText(String(value ?? ""), x, y);
+  }
+
+  function centered(value, size = 18, bold = false) {
+    txt(value, W / 2, size, bold, "center");
+  }
+
+  function rule() {
+    y += 12;
+    ctx.strokeStyle = "#111";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(P, y);
+    ctx.lineTo(R, y);
+    ctx.stroke();
+    y += 27;
+  }
+
+  function pair(label, value) {
+    txt(label, P, 17);
+    txt(value, R, 17, true, "right");
+    y += 31;
+  }
+
+  function heading(label) {
+    txt(label, P, 17, true);
+    y += 36;
+  }
+
+  function wrapText(value, size = 19, bold = false) {
+    font(size, bold);
+    const maxWidth = W - P * 2;
     const lines = [];
-    const paragraphs = String(value || "").split("\n");
 
-    paragraphs.forEach(paragraph => {
+    String(value || "").split("\n").forEach(paragraph => {
       let line = "";
 
-      for (const word of paragraph.split(/\s+/).filter(Boolean)) {
-        const test = line ? line + " " + word : word;
+      for (const char of Array.from(paragraph)) {
+        const test = line + char;
 
-        if (measure.measureText(test).width > maxWidth && line) {
+        if (ctx.measureText(test).width > maxWidth && line) {
           lines.push(line);
-          line = word;
+          line = char;
         } else {
           line = test;
         }
       }
-
       lines.push(line);
     });
 
     return lines;
   }
 
-  function shorten(value, maxWidth, font) {
-    measure.font = font;
-    let result = String(value || "");
-
-    while (
-      result.length &&
-      measure.measureText(result).width > maxWidth
-    ) {
-      result = result.slice(0, -1);
-    }
-
-    return result === value ? result : result.trimEnd() + "…";
+  function paragraph(value, size = 19, bold = false) {
+    const lines = wrapText(value, size, bold);
+    lines.forEach(line => {
+      txt(line, P, size, bold);
+      y += size + 10;
+    });
   }
 
-  const noteLines = wrapLines(
-    note || "A memory worth keeping.",
-    width - margin * 2,
-    "18px monospace"
-  );
+  // Annual summary calculations.
+  const categoryEntries = Object.entries(stats.categories)
+    .sort((a, b) => b[1] - a[1]);
 
-  const height =
-    880 +
-    categories.length * 32 +
-    tickets.length * 51 +
-    noteLines.length * 27;
+  const highestCategory = categoryEntries.length
+    ? categoryEntries[0][1]
+    : 0;
 
-  const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
+  const topCategories = categoryEntries
+    .filter(x => x[1] === highestCategory)
+    .map(x => x[0]);
 
-  const ctx = canvas.getContext("2d");
+  const monthNames = [
+    "JANUARY", "FEBRUARY", "MARCH", "APRIL",
+    "MAY", "JUNE", "JULY", "AUGUST",
+    "SEPTEMBER", "OCTOBER", "NOVEMBER", "DECEMBER"
+  ];
 
-  // White receipt background.
-  ctx.fillStyle = "#ffffff";
-  ctx.fillRect(0, 0, width, height);
+  const peakCount = Math.max(0, ...stats.months);
+  const peakMonths = peakCount
+    ? stats.months
+        .map((count, i) => count === peakCount ? monthNames[i] : null)
+        .filter(Boolean)
+    : [];
 
-  ctx.fillStyle = "#111111";
-  ctx.textBaseline = "top";
+  const favoriteCategory = favorite.category || "Other";
+  const categoryCount = stats.categories[favoriteCategory] || 0;
 
-  let y = 45;
+  const monthIndex = Number(
+    String(favorite.date || "").slice(5, 7)
+  ) - 1;
 
-  function text(value, x, size = 18, align = "left", bold = false) {
-    ctx.font = `${bold ? "bold " : ""}${size}px monospace`;
-    ctx.textAlign = align;
-    ctx.fillText(String(value), x, y);
-  }
+  const favoriteMonth = monthIndex >= 0 && monthIndex < 12
+    ? monthNames[monthIndex]
+    : "UNKNOWN MONTH";
 
-  function center(value, size = 18, bold = false) {
-    text(value, width / 2, size, "center", bold);
-  }
+  const monthCount = monthIndex >= 0 && monthIndex < 12
+    ? stats.months[monthIndex]
+    : 0;
 
-  function pair(left, value, size = 17) {
-    text(left, margin, size);
-    text(value, right, size, "right");
-    y += 30;
-  }
+  // HEADER
+  centered("ephemera.", 48, true);
+  y += 66;
 
-  function line() {
-    ctx.beginPath();
-    ctx.moveTo(margin, y);
-    ctx.lineTo(right, y);
-    ctx.strokeStyle = "#111111";
-    ctx.lineWidth = 1;
-    ctx.stroke();
-    y += 25;
-  }
+  centered("ANNUAL MEMORY RECEIPT", 18);
+  y += 29;
 
-  function dashed() {
-    ctx.save();
-    ctx.setLineDash([6, 6]);
-    line();
-    ctx.restore();
-  }
-
-  function section(title) {
-    y += 12;
-    text(title, margin, 18, "left", true);
-    y += 40;
-  }
-
-  // RECEIPT HEADER
-  center("ephemera.", 46, true);
-  y += 69;
-
-  center("ANNUAL MEMORY RECEIPT", 18);
-  y += 30;
-
-  center("A PERSONAL ARCHIVE OF EXPERIENCES", 14);
-  y += 44;
-
-  line();
-
-  pair("YEAR", year, 21);
-  pair("TOTAL EXPERIENCES", tickets.length, 18);
-
-  y += 10;
-  dashed();
-
-  // CATEGORY BREAKDOWN
-  section("YOUR EXPERIENCES");
-
-  categories.forEach(([category, count]) => {
-    pair(
-      shorten(category.toUpperCase(), 340, "17px monospace"),
-      String(count).padStart(2, "0")
-    );
-  });
-
-  y += 15;
-  line();
-
-  // MONTHLY ACTIVITY
-  section("MONTHLY ACTIVITY");
-
-  stats.months.forEach((count, index) => {
-    const month = String(index + 1).padStart(2, "0");
-    const bar = "#".repeat(Math.min(count, 20));
-
-    pair(`${month}  ${bar}`, String(count).padStart(2, "0"), 16);
-  });
-
-  y += 12;
-  line();
-
-  // ALL TICKET RECORDS
-  section("ITEMIZED MEMORIES");
-
-  const sorted = [...tickets].sort((a, b) =>
-    String(a.date || "").localeCompare(String(b.date || ""))
-  );
-
-  sorted.forEach((ticket, index) => {
-    const number = String(index + 1).padStart(3, "0");
-    const date = ticket.date || "UNDATED";
-
-    text(`${number}  ${date}`, margin, 15);
-    y += 22;
-
-    text(
-      shorten(ticket.title || "Untitled", 500, "17px monospace"),
-      margin + 20,
-      17
-    );
-
-    y += 29;
-  });
-
-  y += 15;
-  dashed();
-
-  // ONE TO KEEP
-  section("ONE TO KEEP");
-
-  const favoriteTitle = wrapLines(
-    favorite.title || "Untitled",
-    width - margin * 2,
-    "bold 19px monospace"
-  );
-
-  favoriteTitle.forEach(item => {
-    text(item, margin, 19, "left", true);
-    y += 27;
-  });
-
-  text(favorite.date || "DATE UNKNOWN", margin, 16);
-  y += 40;
-
-  text("YOUR MEMORY", margin, 15, "left", true);
-  y += 30;
-
-  noteLines.forEach(item => {
-    text(item, margin, 18);
-    y += 27;
-  });
-
-  y += 25;
-  line();
-
-  // TOTAL
-  pair("TOTAL MEMORIES KEPT", tickets.length, 21);
-
+  centered(`PERSONAL ARCHIVE / ${year}`, 15);
   y += 28;
 
-  // Decorative barcode, not a scannable code.
-  const barcodeText =
-    year + tickets.length + String(favorite.id);
+  rule();
 
-  let bx = margin + 32;
+  // YEAR IN REVIEW
+  heading("01 / YOUR YEAR IN REVIEW");
 
-  for (let i = 0; i < 115; i++) {
-    const code = barcodeText.charCodeAt(
-      i % barcodeText.length
-    );
+  pair("YEAR", year);
+  pair("EXPERIENCES KEPT", String(tickets.length).padStart(2, "0"));
 
-    const barWidth = (code + i) % 3 + 1;
+  y += 10;
+  txt("MOST VISITED CATEGORY", P, 15);
+  y += 26;
+  paragraph(topCategories.join(" / ") || "UNKNOWN", 20, true);
 
-    ctx.fillStyle = "#111111";
-    ctx.fillRect(
-      bx,
-      y,
-      barWidth,
-      70
-    );
+  y += 9;
+  txt("BUSIEST MONTH", P, 15);
+  y += 26;
+  paragraph(
+    peakMonths.length
+      ? `${peakMonths.join(" / ")} (${peakCount})`
+      : "NO DATED RECORDS",
+    20, true
+  );
 
-    bx += barWidth + 2;
+  rule();
 
-    if (bx > right - 25) break;
+  // SELECTED TICKET
+  heading("02 / ONE TO KEEP");
+
+  // Load the original selected ticket image.
+  let selectedImage = null;
+
+  if (favorite.image) {
+    selectedImage = await new Promise(resolve => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => resolve(null);
+      img.src = favorite.image;
+    });
   }
 
-  y += 95;
+  if (selectedImage) {
+    const scale = Math.min(
+      (W - P * 2) / selectedImage.width,
+      270 / selectedImage.height,
+      1
+    );
 
-  center(`EPHEMERA / ${year}`, 16);
-  y += 32;
+    const imageW = selectedImage.width * scale;
+    const imageH = selectedImage.height * scale;
 
-  center("COLLECTED, NOT FORGOTTEN.", 17, true);
-  y += 32;
+    ctx.drawImage(
+      selectedImage,
+      (W - imageW) / 2,
+      y,
+      imageW,
+      imageH
+    );
 
-  center("THANK YOU FOR KEEPING.", 15);
+    y += imageH + 29;
+  }
 
-  // Crop to the actual receipt height.
+  paragraph(favorite.title || "UNTITLED", 25, true);
+  y += 8;
+
+  pair("DATE", favorite.date || "UNKNOWN");
+  pair("CATEGORY", favoriteCategory.toUpperCase());
+
+  if (favorite.venue) {
+    txt("VENUE / LOCATION", P, 15);
+    y += 26;
+    paragraph(favorite.venue, 18);
+  }
+
+  rule();
+
+  // PERSONAL INTERPRETATION
+  heading("03 / WHY I KEPT THIS");
+
+  paragraph(
+    note && note.trim()
+      ? note.trim()
+      : "No personal memory added.",
+    20
+  );
+
+  y += 17;
+  rule();
+
+  // THE CHOSEN TICKET IN CONTEXT
+  heading("04 / THIS MEMORY IN CONTEXT");
+
+  pair(
+    "CATEGORY RECORDS",
+    `${categoryCount} / ${tickets.length}`
+  );
+
+  if (favoriteCategory && tickets.length) {
+    pair(
+      "SHARE OF THE YEAR",
+      `${Math.round(categoryCount / tickets.length * 100)}%`
+    );
+  }
+
+  pair(
+    `${favoriteMonth} RECORDS`,
+    String(monthCount).padStart(2, "0")
+  );
+
+  y += 20;
+  rule();
+
+  // FOOTER
+  centered("ONE YEAR.", 21, true);
+  y += 34;
+
+  centered("ONE MEMORY.", 21, true);
+  y += 49;
+
+  centered("COLLECTED, NOT FORGOTTEN.", 16);
+  y += 30;
+
+  centered("THANK YOU FOR KEEPING.", 14);
+  y += 30;
+
+  // Crop blank canvas space.
+  const finalHeight = Math.min(
+    canvas.height,
+    Math.ceil(y + 40)
+  );
+
   const finalCanvas = document.createElement("canvas");
-  finalCanvas.width = width;
-  finalCanvas.height = Math.ceil(y + 65);
+  finalCanvas.width = W;
+  finalCanvas.height = finalHeight;
 
   const finalCtx = finalCanvas.getContext("2d");
-  finalCtx.fillStyle = "#ffffff";
-  finalCtx.fillRect(0, 0, finalCanvas.width, finalCanvas.height);
+  finalCtx.fillStyle = "#fff";
+  finalCtx.fillRect(0, 0, W, finalHeight);
   finalCtx.drawImage(canvas, 0, 0);
 
   const imageURL = finalCanvas.toDataURL("image/png");
 
   showReceiptPreview(imageURL, year);
 }
-
 
 // RECEIPT PREVIEW AND DOWNLOAD
 
