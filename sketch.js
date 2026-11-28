@@ -70,13 +70,24 @@ function setup() {
   document.getElementById('gridTab').onclick = () => { stopCamera(); EP.view='grid'; render(); };
   document.getElementById('addTab').onclick = () => { stopCamera(); newTicket(); };
    
-document.getElementById('annualTab').onclick = () => {
+
+document.getElementById('annualTab').onclick = async () => {
   stopCamera();
+
   annual.step = 0;
   annual.year = "ALL";
   annual.favorite = null;
+
+  const area = document.getElementById("epContent");
+  area.innerHTML = "<p style='padding:50px 0'>LOADING ARCHIVE...</p>";
+
+  if (archive100.length === 0) {
+    await loadArchive100();
+  }
+
   renderAnnual();
 };
+
 
   document.getElementById('fileInput').onchange = async e => { if(e.target.files[0]) await imagePicked(e.target.files[0]); e.target.value=''; };
   document.getElementById('cameraInput').onchange = async e => { if(e.target.files[0]) await imagePicked(e.target.files[0]); e.target.value=''; };
