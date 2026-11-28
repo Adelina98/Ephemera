@@ -60,13 +60,24 @@ function setup() {
   `;
   document.head.appendChild(style);
   document.body.insertAdjacentHTML('beforeend', `<div id="ep"><header><div class="brand">ephemera.</div><div class="rightnav">
-    <button class="btn" id="calendarTab">CALENDAR</button><button class="btn" id="gridTab">GALLERY</button>
+   <button class="btn" id="calendarTab">CALENDAR</button>
+<button class="btn" id="gridTab">GALLERY</button>
+<button class="btn" id="annualTab">ANNUAL RECAP</button>
     <button class="btn dark" id="addTab">+ ADD TICKET</button></div></header><main id="epContent"></main>
     <input type="file" id="fileInput" accept="image/*" hidden><input type="file" id="cameraInput" accept="image/*" capture="environment" hidden>
     <input type="file" id="bulkInput" accept="image/*" multiple hidden></div>`);
   document.getElementById('calendarTab').onclick = () => { stopCamera(); EP.view='calendar'; render(); };
   document.getElementById('gridTab').onclick = () => { stopCamera(); EP.view='grid'; render(); };
   document.getElementById('addTab').onclick = () => { stopCamera(); newTicket(); };
+   
+document.getElementById('annualTab').onclick = () => {
+  stopCamera();
+  annual.step = 0;
+  annual.year = "ALL";
+  annual.favorite = null;
+  renderAnnual();
+};
+
   document.getElementById('fileInput').onchange = async e => { if(e.target.files[0]) await imagePicked(e.target.files[0]); e.target.value=''; };
   document.getElementById('cameraInput').onchange = async e => { if(e.target.files[0]) await imagePicked(e.target.files[0]); e.target.value=''; };
   document.getElementById('bulkInput').onchange = async e => { await importMany(Array.from(e.target.files)); e.target.value=''; };
