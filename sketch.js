@@ -791,12 +791,22 @@ function renderAnnual() {
 
   let intro = "";
 
-  if (annual.step === 0) {
-    intro = `
-      <h1>The Entire Collection.</h1>
-      <p>${records.length} OBJECTS / ALL YEARS</p>
-    `;
-  }
+  
+if (annual.step === 0) {
+  intro = `
+    <h1 id="annualTitle">
+      ${annual.year === "ALL"
+        ? "The Entire Collection."
+        : annual.year + "."}
+    </h1>
+
+    <p id="annualSubtitle">
+      ${annualSelected().length} OBJECTS /
+      ${annual.year === "ALL" ? "ALL YEARS" : annual.year}
+    </p>
+  `;
+}
+
 
   if (annual.step === 1) {
     intro = `
@@ -850,7 +860,9 @@ function renderAnnual() {
 
       <div class="annual-controls">
 
-        ${annual.step >= 1 ? `
+       
+${annual.step >= 0 ? `
+
           <label>
             YEAR
             <select id="annualYear">
@@ -935,10 +947,39 @@ function renderAnnual() {
   const yearSelect = document.getElementById("annualYear");
 
   if (yearSelect) {
-    yearSelect.onchange = e => {
-      annual.year = e.target.value;
-      updateAnnualGrid();
-    };
+    
+yearSelect.onchange = e => {
+  annual.year = e.target.value;
+
+  // Update ticket positions and opacity.
+  updateAnnualGrid();
+
+  // Update heading and ticket count.
+  const title = document.getElementById("annualTitle");
+  const subtitle = document.getElementById("annualSubtitle");
+
+  if (title) {
+    title.textContent =
+      annual.year === "ALL"
+        ? "The Entire Collection."
+        : annual.year + ".";
+  }
+
+  if (subtitle) {
+    subtitle.textContent =
+      annualSelected().length +
+      " OBJECTS / " +
+      (annual.year === "ALL"
+        ? "ALL YEARS"
+        : annual.year);
+  }
+
+  // Refresh statistics when viewing patterns.
+  if (annual.step === 2) {
+    renderAnnual();
+  }
+};
+
   }
 
   const modeSelect = document.getElementById("annualMode");
